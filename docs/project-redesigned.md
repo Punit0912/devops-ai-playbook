@@ -4,6 +4,140 @@
 
 ---
 
+## Who Does What — In Order
+
+### Phase 1: Developers (Application Team)
+
+```
+1. Write application code (React frontend, Node.js backend services)
+2. Write Dockerfiles for each service (multi-stage builds)
+3. Create docker-compose.yml for local development
+4. Test locally: docker-compose up → verify services communicate
+5. Write unit/integration tests
+6. Push code to GitHub (feature branch → PR → merge to main)
+```
+
+**What devs own:**
+```
+projects/boutique-microservices/
+├── frontend/                    # React app + Dockerfile
+├── backend/services/
+│   ├── auth/                    # Source code + Dockerfile
+│   ├── gateway/                 # Source code + Dockerfile
+│   ├── orders/                  # Source code + Dockerfile
+│   ├── order-service/           # Source code + Dockerfile
+│   ├── product-service/         # Source code + Dockerfile
+│   └── user-service/            # Source code + Dockerfile
+├── docker-compose.yml           # Local dev environment
+└── database/
+    └── boutique_full.sql        # Schema + seed data
+```
+
+---
+
+### Phase 2: DevOps Engineer (Platform Team)
+
+**Step 1: Infrastructure (Terraform)**
+```
+Write Terraform modules:
+├── modules/vpc/          # VPC, subnets, IGW, route tables
+├── modules/eks/          # EKS cluster, node group, IAM roles, OIDC, EBS CSI
+├── modules/ecr/          # One ECR repo per service
+├── modules/argocd/       # ArgoCD + Prometheus/Grafana via Helm
+├── main.tf               # Wires all modules together
+├── variables.tf          # Input variables
+├── terraform.tfvars      # Values (region, instance type, repo names)
+└── provider.tf           # AWS provider config
+```
+
+**Step 2: CI Pipeline (GitHub Actions)**
+```
+Write .github/workflows/ci.yml:
+├── Job 1: build-and-push
+│   ├── Checkout code
+│   ├── Configure AWS credentials
+│   ├── Login to ECR
+│   ├── Build Docker image (tag = git SHA)
+│   └── Push to ECR
+└── Job 2: update-manifests
+    ├── sed to update image tags in gitops/k8s/*.yml
+    └── Commit + push updated manifests back to GitHub
+```
+
+**Step 3: Kubernetes Manifests (GitOps folder)**
+```
+Write gitops/:
+├── argo-cd.yml              # ArgoCD Application (what repo + path to watch)
+├── kustomization.yml        # Kustomize entry point (lists all resources)
+├── namespace.yml            # boutique namespace
+├── secrets.yml              # DB connection strings
+└── k8s/
+    ├── database/
+    │   ├── statefulset.yml  # PostgreSQL pod + PVC
+    │   ├── service.yml      # DB service (ClusterIP)
+    │   └── restore-job.yml  # Job to initialize databases on first deploy
+    ├── backend/
+    │   ├── auth.yml         # Deployment + Service
+    │   ├── gateway.yml      # Deployment + Service
+    │   ├── orders.yml       # Deployment + Service
+    │   ├── order-service.yml
+    │   ├── product-service.yml
+    │   ├── user-service.yml
+    │   └── service-monitor.yml  # Prometheus scraping
+    └── frontend/
+        └── deployment.yml   # Deployment + Service
+```
+
+**Step 4: Deploy**
+```
+1. terraform apply                          # Creates VPC, EKS, ECR, ArgoCD, Prometheus
+2. aws eks update-kubeconfig                # Connect kubectl to cluster
+3. Push code to trigger CI                  # Builds images, updates manifests on GitHub
+4. kubectl apply -f gitops/argo-cd.yml      # Register app in ArgoCD
+5. Port-forward to ArgoCD, connect repo     # One-time UI setup
+6. Sync                                     # ArgoCD deploys everything
+7. Restore job runs automatically           # Creates databases
+8. All services healthy ✅
+```
+
+---
+
+## What We Actually Did (Correct Order)
+
+### One-Time Setup
+
+| # | Action | Who | Command/Tool |
+|---|--------|-----|-------------|
+| 1 | Devs wrote microservices + Dockerfiles | Developers | Code editor |
+| 2 | Devs tested locally with docker-compose | Developers | `docker-compose up` |
+| 3 | DevOps wrote Terraform (VPC, EKS, ECR, ArgoCD) | DevOps | VS Code |
+| 4 | DevOps wrote CI pipeline | DevOps | `.github/workflows/ci.yml` |
+| 5 | DevOps wrote K8s manifests + Kustomization | DevOps | `gitops/` folder |
+| 6 | DevOps ran `terraform apply` | DevOps | Terminal (VS Code) |
+| 7 | DevOps configured GitHub Secrets (AWS creds) | DevOps | GitHub Settings |
+| 8 | DevOps pushed to trigger CI (build + push images to ECR) | DevOps | `git push` |
+| 9 | DevOps applied ArgoCD application | DevOps | `kubectl apply -f gitops/argo-cd.yml` |
+| 10 | DevOps port-forwarded to ArgoCD | DevOps | `kubectl port-forward svc/argocd-server -n argocd 8080:80` |
+| 11 | DevOps connected repo in ArgoCD UI | DevOps | ArgoCD Settings → Repos |
+| 12 | DevOps synced the application | DevOps | ArgoCD UI → Sync |
+| 13 | Restore job created databases automatically | Automated | K8s Job |
+| 14 | All pods running ✅ | Automated | CrashLoopBackOff → Recovery |
+
+### Every Future Code Push (Automated)
+
+| # | What happens | Who triggers | What does the work |
+|---|-------------|-------------|-------------------|
+| 1 | Dev pushes code to main | Developer | `git push` |
+| 2 | CI builds new images | Automated | GitHub Actions |
+| 3 | CI pushes to ECR (new SHA tag) | Automated | GitHub Actions |
+| 4 | CI updates image tags in `gitops/k8s/*.yml` | Automated | GitHub Actions (sed + commit) |
+| 5 | ArgoCD detects manifest change on GitHub | Automated | ArgoCD (polls every 3 min) |
+| 6 | ArgoCD syncs: rolls out new pods | Automated | ArgoCD (auto-sync enabled) |
+| 7 | New pods pull updated images from ECR | Automated | Kubernetes |
+| 8 | Zero-downtime deployment complete ✅ | Automated | Rolling update |
+
+---
+
 ## Services Used
 
 ```
@@ -22,6 +156,7 @@ Developer
       → GitHub Actions (CI):
           → builds Docker images (tag = git SHA)
           → pushes to ECR
+          → updates the latest image tag in github repo under path: gitops/k8s/backend & frontend(second stage)
           → DONE (CI never touches manifests or cluster)
       → ArgoCD Image Updater (running in-cluster):
           → detects new image tag in ECR
@@ -366,3 +501,125 @@ Client
 ---
 
 *This is how the project should work. One `terraform apply`, then every git push flows automatically to production without anyone touching kubectl, ArgoCD UI, or manually fixing image tags.*
+
+---
+
+## Order of Operations: Who Does What and When
+
+### Phase 1: Developers Build the Application
+
+| Step | Who | What They Do |
+|------|-----|--------------|
+| 1 | Dev | Write application code (Node.js/TypeScript microservices: auth, gateway, orders, order-service, product-service, user-service, frontend) |
+| 2 | Dev | Write `Dockerfile` for each service |
+| 3 | Dev | Create `docker-compose.yml` to run all services + PostgreSQL locally |
+| 4 | Dev | Test locally: `docker compose up` — verify services talk to each other, DB migrations run, frontend renders |
+| 5 | Dev | Write database migrations inside each service (`CREATE TABLE IF NOT EXISTS` on startup) |
+| 6 | Dev | Push working code to GitHub (`projects/boutique-microservices/`) |
+
+**Dev's deliverables:**
+- Working source code per service
+- Dockerfile per service
+- docker-compose.yml (for local dev/testing)
+- DB migration logic inside each service
+
+---
+
+### Phase 2: DevOps Engineers Build the Platform
+
+| Step | Who | What They Do |
+|------|-----|--------------|
+| 7 | DevOps | Write Terraform modules (`projects/Infrastructure/`) — VPC, EKS, ECR, IAM, ArgoCD, Prometheus |
+| 8 | DevOps | Write Kubernetes manifests (`gitops/k8s/`) — Deployments, Services, StatefulSet, Secrets, ConfigMaps |
+| 9 | DevOps | Write `kustomization.yml` (`gitops/`) — ties all manifests together, defines image transformers |
+| 10 | DevOps | Write ArgoCD Application manifest (`gitops/argo-cd.yml`) — points to gitops/ path, enables auto-sync |
+| 11 | DevOps | Write CI pipeline (`.github/workflows/ci.yml`) — builds images, pushes to ECR, updates image tags |
+| 12 | DevOps | Write database restore job / init container (`gitops/k8s/database/`) — ensures DBs are created on first deploy |
+| 13 | DevOps | Write monitoring config (`prometheus/prometheus.yml`, `grafana/provisioning/`) |
+
+**DevOps deliverables:**
+- Terraform code (entire infrastructure)
+- Kubernetes manifests (all workloads)
+- CI/CD pipeline (GitHub Actions)
+- GitOps config (ArgoCD Application + kustomization)
+- Observability stack config
+
+---
+
+### Phase 3: First Deployment (One-Time)
+
+| Step | Who | What They Do |
+|------|-----|--------------|
+| 14 | DevOps | Run `terraform apply` → creates VPC, EKS, ECR repos, installs ArgoCD + Prometheus via Helm |
+| 15 | DevOps | Apply ArgoCD Application: `kubectl apply -f gitops/argo-cd.yml` (or Terraform does this automatically) |
+| 16 | DevOps | Connect repo to ArgoCD (via Terraform secret or manual one-time setup) |
+| 17 | Auto | ArgoCD syncs `gitops/` folder → creates namespace, deploys PostgreSQL StatefulSet, runs restore job, deploys all services |
+| 18 | Auto | PostgreSQL starts → init container/restore job creates databases (auth_db, orders_db, products_db, users_db) |
+| 19 | Auto | Microservice pods start → each runs `CREATE TABLE IF NOT EXISTS` → tables ready |
+| 20 | Auto | All pods healthy ✅ |
+
+---
+
+### Phase 4: Ongoing Development (Every Feature/Fix)
+
+| Step | Who | What They Do |
+|------|-----|--------------|
+| 21 | Dev | Makes code change, tests locally with `docker compose up` |
+| 22 | Dev | Pushes to `main` branch |
+| 23 | Auto | GitHub Actions triggers → builds Docker image (tag = git SHA) → pushes to ECR |
+| 24 | Auto | CI updates image tag in manifests on GitHub (or ArgoCD Image Updater detects new tag) |
+| 25 | Auto | ArgoCD detects manifest change → syncs → rolling update → new pods deploy |
+| 26 | Auto | Zero-downtime rollout complete ✅ |
+
+---
+
+### Visual Timeline
+
+```
+WEEK 1-2: Devs write code
+┌─────────────────────────────────────────────────┐
+│ Dev: code → Dockerfile → docker-compose → test  │
+└─────────────────────────────────────────────────┘
+
+WEEK 2-3: DevOps builds platform
+┌─────────────────────────────────────────────────┐
+│ DevOps: Terraform → K8s manifests → CI pipeline │
+│         → ArgoCD config → monitoring            │
+└─────────────────────────────────────────────────┘
+
+WEEK 3: First deploy
+┌─────────────────────────────────────────────────┐
+│ DevOps: terraform apply                         │
+│ DevOps: kubectl apply -f gitops/argo-cd.yml     │
+│ Auto:   ArgoCD syncs → pods deploy → DB inits   │
+│ Result: Production running ✅                    │
+└─────────────────────────────────────────────────┘
+
+WEEK 4+: Continuous delivery
+┌─────────────────────────────────────────────────┐
+│ Dev: git push                                   │
+│ Auto: CI → ECR → ArgoCD → new pods → done ✅    │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+### What We Actually Did (Our Journey)
+
+1. **Devs wrote the app** — 7 microservices + React frontend + docker-compose for local testing
+2. **DevOps wrote Terraform** — EKS cluster, ECR repos, VPC, IAM roles, ArgoCD Helm release
+3. **DevOps wrote K8s manifests** — Deployments, Services, StatefulSet, Secrets, restore job
+4. **DevOps wrote CI pipeline** — GitHub Actions: build → push to ECR → update image tags in repo
+5. **DevOps ran `terraform apply`** — infrastructure created in ~15 minutes
+6. **DevOps applied ArgoCD Application** — `kubectl apply -f gitops/argo-cd.yml`
+7. **ArgoCD auto-synced** — pulled manifests from GitHub, deployed everything to cluster
+8. **Restore job ran** — created all 4 databases in PostgreSQL
+9. **Services started** — connected to DB, ran migrations, became healthy
+10. **Verified** — port-forwarded to frontend, confirmed app working end-to-end
+
+**Lessons learned along the way:**
+- Always include the restore job in `kustomization.yml` (otherwise DB stays empty)
+- Don't hardcode AWS account IDs in manifests (use Kustomize image transformer)
+- Pull latest from GitHub before pushing ArgoCD changes (avoid out-of-sync errors)
+- Enable `syncPolicy.automated` so ArgoCD syncs without manual UI clicks
+- CI should update manifests on GitHub so ArgoCD can detect changes immediately
