@@ -224,3 +224,88 @@ aws iam get-role-policy \
 
 ### AWS credentials not resolving in Streamlit
 If `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are left blank in `.env`, boto3 falls back to the default credential chain (`~/.aws/credentials`, environment variables, IAM role). If none of those are configured, Bedrock calls will fail with an auth error. Either fill in the credentials in `.env` or ensure your terminal session has valid AWS credentials before starting Streamlit.
+
+# My notes
+
+## Important Concepts
+
+### Foundational Model
+Pre-trained large AI models ready to use
+No need to train, just leverage them
+
+### Model as an API
+Access AI models via simple http calls
+No need to host or manage infrastructure
+
+### Inference
+Model takes input and returns output
+We give data > It generates results
+
+### Prompt Engineering
+How we ask = What we get
+Better prompts lead to better asnwers
+
+### System Prompt
+Defines AI's role and behaviour
+Set boundaries before interaction starts
+
+### Agent
+Not just answering -- it acts
+Decides steps and uses tools autonomously
+
+### Tool calling
+AI can trgger external functions
+Fetches data and performs actions dynamically
+
+### Context Window
+AI's short-term memory
+Holds conversations, logs, and data context
+
+### Serverless
+Run code without managing servers
+Pay only when your function executes
+
+### Event-Driver Architecture
+Nothing runs until triggered
+Every action starts from an event
+
+## Cloud services
+
+### Bedrock
+Bedrock is AWS Managed AI Platform
+Instead of creating our own GPU cluster, hosting the model; bedrock gives us access to foundation models like claude, lama, quenn etc. through a simple api
+
+### Bedrock Agent
+Adds reasoning layer to the application, so AI can analyse problems and take actions
+
+### Lambda
+Serverless functions that execute tasks on demand for the agent
+If agent is the brain, lambda functions are the hands
+Each lambda function that we implement has its specific capability that agent can reach for, like need to check logs, call lambda 1, need to see if pods are crashing, call lambda 2 etc. 
+These lambda functions talk to AWS APIs that we already have, so new infrastructure , we are only putting AI layer on top of the existing infrastructure
+
+### Cloudwatch
+Push logs from application to AWS Cloudwatch
+
+### Streamlit
+Builds a simple interactive UI to communicate with the AI agents, it is like frontend
+It is a python UI framework which is perfect for creating interactive webapps using python scripts
+Streamlit will help us deploy the UI and we will be interacting with the agent through it
+
+## High level steps:
+
+Step 1 : Export EKS logs to Cloudwatch
+
+Step 2: Add cloudwatch, its logs, create loggroups etc permissions to eks role
+
+Step 3: downlaod fluentbit via helm and install
+
+Step 4: Make the kube-prometheus-stack service as type load balancer and update the value in functions
+
+Step 5 Deploy three action groups, which are three lambda functions for us
+
+Step 6: Create role with bedrock permissions to invoke the model and lambda fucntions
+
+Step 7: Go to Bedrock > Model Catalog
+
+Step 8: Run deployment script to deploy the agent via deploy.sh
