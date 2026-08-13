@@ -309,3 +309,66 @@ Step 6: Create role with bedrock permissions to invoke the model and lambda fucn
 Step 7: Go to Bedrock > Model Catalog
 
 Step 8: Run deployment script to deploy the agent via deploy.sh
+
+## Request Flow
+
+We have a chat interface, where we can write questions > Request is sent to Bedrock Agent running a model as the reasoning engine > It hits the agentic loop and decides what it needs like logs, metrics etc > It calls the right lambda function(s) > Function fetches the data and hands it over to the bedrock agent > Agent reasons through it and finds the issue/answer > Agent gives us answer with the root cause and possible remediation steps
+
+## Steps
+
+### Setting up Cloudwatch Logstreams 
+> Add CloudWatchAgentServerPolicy to eks node group role for accessing and creating loggroups; I didn't create a separate inline policy as trainer
+> Add and install AWS helm charts: 
+helm repo add aws https://aws.github.io/eks-charts; helm repo update
+helm upgrade --install aws-for-fluent-bit aws/aws-for-fluent-bit --namespace amazon-cloudwatch --create-namespace --set cloudWatchLogs.enabled=true --set cloudWatchLogs.region=us-east-1 --set cloudWatchLogs.logGroupName=/eks/boutique/pods --set cloudWatchLogs.logStreamPrefix=from-fluent-bit- --set firehose.enabled=false --set kinesis.enabled=false --set elasticsearch.enabled=false
+
+> above step will create the pods and log group: /eks/boutique/pods
+> go inside this log group, logstreams should be present
+
+### Setting up Action Groups(Lambda fucntions)
+
+> First ensure that kubectl-prometheus-stack-prometheus service is accessible outside the cluster by changing its service type as load balancer:
+kubectl patch svc kube-prometheus-stack-prometheus -n monitoring -p '{\"spec\": {\"type\": \"LoadBalancer\"}}'
+> update the elb hostname in lambda fucntions
+> Create 3 functions with script given in this repo
+
+### Configure Bedrock Agent
+
+> Create bedrock agent role with custom trust policy:
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Principal": {
+        "Service": "bedrock.amazonaws.com"
+      },
+			"Action": "sts:AssumeRole"
+		}
+	]
+}
+
+attach inline policy:
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:InvokeFunction",
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
+            ],
+            "Resource": [
+                "arn:aws:bedrock:us-east-1::foundation-model/*",
+                "arn:aws:lambda:*:851438481881:function:*"
+            ]
+        }
+    ]
+}
+
+> Deploy the bedrock agent with deploy.sh
+
+> Run streamlit ui from app.pyco

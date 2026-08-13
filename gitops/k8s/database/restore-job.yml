@@ -15,13 +15,16 @@ spec:
             - sh
             - -c
             - |
-              echo "Waiting for Postgres..."
-              until pg_isready -h boutique-postgres -U postgres; do
-                sleep 2
+              set -e
+              echo "Waiting for Postgres DNS + connection..."
+              # Wait until we can actually run a query (covers DNS races, not just port readiness)
+              until psql -h boutique-postgres -U postgres -d postgres -c "SELECT 1" >/dev/null 2>&1; do
+                echo "postgres not reachable yet (dns/connection), retrying..."
+                sleep 3
               done
 
               echo "Restoring dump..."
-              psql -h boutique-postgres -U postgres -f /dump/boutique_full.sql
+              psql -h boutique-postgres -U postgres -d postgres -v ON_ERROR_STOP=1 -f /dump/boutique_full.sql
 
               echo "Creating auth_db schema..."
               psql -h boutique-postgres -U postgres -d auth_db -c "

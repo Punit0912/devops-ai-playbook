@@ -43,7 +43,7 @@ st.markdown("""
 
     .stApp {
         background-color: #0a0e14;
-        color: #c5c8c6;
+        color: #e6e9ef;
     }
 
     .main-header {
@@ -61,7 +61,7 @@ st.markdown("""
     }
     .main-header p {
         font-family: 'DM Sans', sans-serif;
-        color: #5a6270;
+        color: #9aa4b2;
         font-size: 0.85rem;
         margin: 0.3rem 0 0 0;
     }
@@ -104,6 +104,16 @@ st.markdown("""
         border: 1px solid #1a1f2e !important;
         border-radius: 8px !important;
         font-family: 'DM Sans', sans-serif !important;
+    }
+
+    /* Force readable text inside chat messages */
+    [data-testid="stChatMessage"],
+    [data-testid="stChatMessage"] p,
+    [data-testid="stChatMessage"] li,
+    [data-testid="stChatMessage"] span,
+    [data-testid="stChatMessageContent"],
+    [data-testid="stChatMessageContent"] * {
+        color: #eef1f6 !important;
     }
 
     [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
@@ -239,11 +249,11 @@ st.markdown(f"""
     <div class="status-dot"></div>
     <span style="color: #22d3ee;">ONLINE</span>
     <span style="color: #2a3040;">|</span>
-    <span style="color: #5a6270;">Session: {st.session_state.session_id[:8]}</span>
+    <span style="color: #9aa4b2;">Session: {st.session_state.session_id[:8]}</span>
     <span style="color: #2a3040;">|</span>
-    <span style="color: #5a6270;">Region: {AWS_REGION}</span>
+    <span style="color: #9aa4b2;">Region: {AWS_REGION}</span>
     <span style="color: #2a3040;">|</span>
-    <span style="color: #5a6270;">Agent: {AGENT_ID}</span>
+    <span style="color: #9aa4b2;">Agent: {AGENT_ID}</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -301,7 +311,7 @@ with st.sidebar:
     st.markdown("""
     <div style="font-family: 'JetBrains Mono', monospace; padding: 1rem 0;">
         <h3 style="color: #22d3ee; font-size: 1rem;">⚡ KIRA</h3>
-        <p style="color: #5a6270; font-size: 0.8rem;">AIOps Assistant v1.0</p>
+        <p style="color: #9aa4b2; font-size: 0.8rem;">AIOps Assistant v1.0</p>
     </div>
     """, unsafe_allow_html=True)
 

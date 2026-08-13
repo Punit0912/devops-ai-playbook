@@ -1,21 +1,5 @@
-resource "kubernetes_namespace_v1" "argocd" {
-  metadata {
-    name = "argocd"
-  }
-}
-
-resource "kubernetes_namespace_v1" "monitoring" {
-  metadata {
-    name = "monitoring"
-  }
-}
-
 terraform {
   required_providers {
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "2.31.0"
-    }
     helm = {
       source  = "hashicorp/helm"
       version = "2.14.0"
@@ -26,12 +10,12 @@ terraform {
 
 resource "helm_release" "argocd" {
   name       = "argocd"
-  namespace  = kubernetes_namespace_v1.argocd.metadata[0].name
+  namespace  = "argocd"
   repository = "https://argoproj.github.io/argo-helm"
   chart      = "argo-cd"
   version    = "6.7.0"
 
-  create_namespace = false
+  create_namespace = true
 
   values = [
     yamlencode({
@@ -51,14 +35,14 @@ resource "helm_release" "argocd" {
 
 resource "helm_release" "monitoring" {
   name       = "kube-prometheus-stack"
-  namespace  = kubernetes_namespace_v1.monitoring.metadata[0].name
+  namespace  = "monitoring"
 
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
   version    = "56.21.0"
 
   timeout          = 600
-  create_namespace = false
+  create_namespace = true
 
   values = [
     yamlencode({
@@ -81,8 +65,4 @@ resource "helm_release" "monitoring" {
       }
     })
   ]
-
-  depends_on = [
-    kubernetes_namespace_v1.monitoring
-  ] 
 }

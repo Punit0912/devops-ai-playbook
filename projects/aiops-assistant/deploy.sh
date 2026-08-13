@@ -132,13 +132,13 @@ fi
 echo ""
 echo "[3/3] Adding action groups and preparing agent..."
 
-python3 - <<PYEOF
+python - <<PYEOF
 import boto3, json, sys
 
 region = "$REGION"
 agent_id = "$AGENT_ID"
 account_id = "$ACCOUNT_ID"
-script_dir = "$SCRIPT_DIR"
+script_dir = "."
 
 client = boto3.client("bedrock-agent", region_name=region)
 
