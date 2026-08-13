@@ -4,9 +4,15 @@ metadata:
   name: boutique-db-restore
   namespace: boutique
   annotations:
-    # Jobs are immutable: ArgoCD can't patch spec.template. Replace=true makes
-    # ArgoCD delete+recreate the Job on sync instead of failing on the immutable field.
-    argocd.argoproj.io/sync-options: Replace=true
+    # Jobs are immutable in Kubernetes: ArgoCD can't patch spec.template and a
+    # completed Job that gets garbage-collected shows up as "Missing"/OutOfSync.
+    # Run this as an ArgoCD sync hook so ArgoCD deletes + recreates the Job on
+    # every sync (instead of tracking it as permanent live state) and never
+    # tries to patch the immutable spec.
+    argocd.argoproj.io/hook: Sync
+    # Delete the previous hook Job right before creating the new one, so a
+    # leftover/completed Job never blocks the next sync.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 3
   template:
